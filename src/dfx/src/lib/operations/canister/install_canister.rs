@@ -46,9 +46,11 @@ pub async fn install_canister(
 ) -> DfxResult {
     let log = env.get_logger();
     let network = env.get_network_descriptor();
+    /*
     if !network.is_ic && named_canister::get_ui_canister_id(canister_id_store).is_none() {
         named_canister::install_ui_canister(env, canister_id_store, None).await?;
     }
+    */
     let canister_id = canister_info.get_canister_id()?;
     let installed_module_hash = match agent
         .read_state_canister_info(canister_id, "module_hash")
