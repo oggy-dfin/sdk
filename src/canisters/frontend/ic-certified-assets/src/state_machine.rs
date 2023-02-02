@@ -106,7 +106,10 @@ pub struct State {
     batches: HashMap<BatchId, Batch>,
     next_batch_id: BatchId,
 
-    authorized: Vec<Principal>,
+    // permissions
+    commit_principals: Vec<Principal>,
+    prepare_principals: Vec<Principal>,
+    manage_permissions_principals: Vec<Principal>,
 
     asset_hashes: AssetHashes,
 }
@@ -119,14 +122,18 @@ pub struct V0StableState {
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct StableState {
-    authorized: Vec<Principal>,
+    commit_principals: Vec<Principal>,
+    prepare_principals: Vec<Principal>,
+    manage_permissions_principals: Vec<Principal>,
     stable_assets: HashMap<String, Asset>,
 }
 
 impl StableState {
     pub fn from(v0: V0StableState) -> Self {
         Self {
-            authorized: v0.authorized,
+            commit_principals: v0.authorized,
+            prepare_principals: vec![],
+            manage_permissions_principals: vec![],
             stable_assets: v0.stable_assets,
         }
     }
@@ -161,25 +168,30 @@ impl State {
             .ok_or_else(|| "asset not found".to_string())
     }
 
-    pub fn authorize_unconditionally(&mut self, principal: Principal) {
-        if !self.is_authorized(&principal) {
-            self.authorized.push(principal);
+    pub fn grant_permission(&mut self, principal: Principal, permission: &Permission) {
+        let permitted = self.get_mut_permission_list(permission);
+        if !permitted.contains(&principal) {
+            permitted.push(principal);
         }
     }
 
-    pub fn deauthorize_unconditionally(&mut self, principal: Principal) {
-        if let Some(pos) = self.authorized.iter().position(|x| *x == principal) {
-            self.authorized.remove(pos);
+    pub fn revoke_permission(&mut self, principal: Principal, permission: &Permission) {
+        let permitted = self.get_mut_permission_list(permission);
+
+        if let Some(pos) = permitted.iter().position(|x| *x == principal) {
+            permitted.remove(pos);
         }
     }
 
-    pub fn list_authorized(&self) -> &Vec<Principal> {
-        &self.authorized
+    pub fn list_permitted(&self, permission: &Permission) -> &Vec<Principal> {
+        self.get_permission_list(permission)
     }
 
     pub fn take_ownership(&mut self, controller: Principal) {
-        self.authorized.clear();
-        self.authorized.push(controller);
+        self.commit_principals.clear();
+        self.prepare_principals.clear();
+        self.manage_permissions_principals.clear();
+        self.commit_principals.push(controller);
     }
 
     pub fn root_hash(&self) -> Hash {
@@ -290,8 +302,31 @@ impl State {
         self.next_chunk_id = Nat::from(1);
     }
 
-    pub fn is_authorized(&self, principal: &Principal) -> bool {
-        self.authorized.contains(principal)
+    pub fn has_permission(&self, principal: &Principal, permission: &Permission) -> bool {
+        let list = self.get_permission_list(permission);
+        list.contains(principal)
+    }
+
+    pub fn can(&self, principal: &Principal, permission: &Permission) -> bool {
+        self.has_permission(principal, permission)
+            || (*permission == Permission::Prepare
+                && self.has_permission(principal, &Permission::Commit))
+    }
+
+    fn get_permission_list(&self, permission: &Permission) -> &Vec<Principal> {
+        match permission {
+            Permission::Commit => &self.commit_principals,
+            Permission::Prepare => &self.prepare_principals,
+            Permission::ManagePermissions => &self.manage_permissions_principals,
+        }
+    }
+
+    fn get_mut_permission_list(&mut self, permission: &Permission) -> &mut Vec<Principal> {
+        match permission {
+            Permission::Commit => &mut self.commit_principals,
+            Permission::Prepare => &mut self.prepare_principals,
+            Permission::ManagePermissions => &mut self.manage_permissions_principals,
+        }
     }
 
     pub fn retrieve(&self, key: &Key) -> Result<RcBytes, String> {
@@ -685,7 +720,9 @@ impl State {
 impl From<State> for StableState {
     fn from(state: State) -> Self {
         Self {
-            authorized: state.authorized,
+            commit_principals: state.commit_principals,
+            prepare_principals: state.prepare_principals,
+            manage_permissions_principals: state.manage_permissions_principals,
             stable_assets: state.assets,
         }
     }
@@ -694,7 +731,9 @@ impl From<State> for StableState {
 impl From<StableState> for State {
     fn from(stable_state: StableState) -> Self {
         let mut state = Self {
-            authorized: stable_state.authorized,
+            commit_principals: stable_state.commit_principals,
+            prepare_principals: stable_state.prepare_principals,
+            manage_permissions_principals: stable_state.manage_permissions_principals,
             assets: stable_state.stable_assets,
             ..Self::default()
         };
