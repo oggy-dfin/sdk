@@ -8,7 +8,7 @@ mod url_decode;
 #[cfg(test)]
 mod tests;
 
-pub use crate::state_machine::StableState;
+pub use crate::state_machine::{StableState, V0StableState};
 use crate::{
     http::{HttpRequest, HttpResponse, StreamingCallbackHttpResponse, StreamingCallbackToken},
     rc_bytes::RcBytes,

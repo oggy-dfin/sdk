@@ -112,10 +112,27 @@ pub struct State {
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
+pub struct V0StableState {
+    authorized: Vec<Principal>,
+    stable_assets: HashMap<String, Asset>,
+}
+
+#[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct StableState {
     authorized: Vec<Principal>,
     stable_assets: HashMap<String, Asset>,
 }
+
+impl StableState {
+    pub fn from(v0: V0StableState) -> Self {
+        Self {
+            authorized: v0.authorized,
+            stable_assets: v0.stable_assets,
+        }
+    }
+}
+
+pub const STABLE_VERSION: u32 = 1;
 
 impl Asset {
     fn allow_raw_access(&self) -> bool {
