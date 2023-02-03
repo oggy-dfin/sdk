@@ -121,25 +121,48 @@ pub struct V0StableState {
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
-pub struct StableState {
+pub struct V1StableState {
     commit_principals: Vec<Principal>,
     prepare_principals: Vec<Principal>,
     manage_permissions_principals: Vec<Principal>,
     stable_assets: HashMap<String, Asset>,
 }
 
+#[derive(Clone, Debug, CandidType, Deserialize)]
+pub struct StableState {
+    commit_principals: Vec<Principal>,
+    prepare_principals: Vec<Principal>,
+    manage_permissions_principals: Vec<Principal>,
+    stable_assets: HashMap<String, Asset>,
+
+    next_chunk_id: ChunkId,
+    next_batch_id: BatchId,
+}
+
 impl StableState {
-    pub fn from(v0: V0StableState) -> Self {
+    pub fn from_v0(v0: V0StableState) -> Self {
         Self {
             commit_principals: v0.authorized,
             prepare_principals: vec![],
             manage_permissions_principals: vec![],
             stable_assets: v0.stable_assets,
+            next_chunk_id: Nat::from(1),
+            next_batch_id: Nat::from(1),
+        }
+    }
+    pub fn from_v1(v1: V1StableState) -> Self {
+        Self {
+            commit_principals: v1.commit_principals,
+            prepare_principals: v1.prepare_principals,
+            manage_permissions_principals: v1.manage_permissions_principals,
+            stable_assets: v1.stable_assets,
+            next_chunk_id: Nat::from(1),
+            next_batch_id: Nat::from(1),
         }
     }
 }
 
-pub const STABLE_VERSION: u32 = 1;
+pub const STABLE_VERSION: u32 = 2;
 
 impl Asset {
     fn allow_raw_access(&self) -> bool {
@@ -724,6 +747,8 @@ impl From<State> for StableState {
             prepare_principals: state.prepare_principals,
             manage_permissions_principals: state.manage_permissions_principals,
             stable_assets: state.assets,
+            next_batch_id: state.next_batch_id,
+            next_chunk_id: state.next_chunk_id,
         }
     }
 }
@@ -735,6 +760,8 @@ impl From<StableState> for State {
             prepare_principals: stable_state.prepare_principals,
             manage_permissions_principals: stable_state.manage_permissions_principals,
             assets: stable_state.stable_assets,
+            next_chunk_id: stable_state.next_chunk_id,
+            next_batch_id: stable_state.next_batch_id,
             ..Self::default()
         };
 
